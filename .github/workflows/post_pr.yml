@@ -5,7 +5,7 @@ on:
     types: [closed]
 
 jobs:
-  my-action:
+  post_pr_tag:
     if: ${{ github.event.pull_request.merged }}
     runs-on: ubuntu-latest
     steps:
