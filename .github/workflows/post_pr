@@ -1,0 +1,21 @@
+on:
+  pull_request:
+    branches: 
+      - main
+    types: [closed]
+
+jobs:
+  my-action:
+    if: ${{ github.event.pull_request.merged }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create tag
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{ github.event.number }}',
+              sha: context.sha
+            })
