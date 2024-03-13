@@ -16,6 +16,6 @@ jobs:
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: 'refs/tags/${{ github.event.number }}',
-              sha: context.sha
+              ref: 'refs/tags/PR#${{ github.event.number }}',
+              sha: ${{ github.event.pull_request.head.sha }}
             })
