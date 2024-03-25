@@ -13,10 +13,9 @@ jobs:
         uses: actions/github-script@v5
         with:
           script: |
-            const SANITIZED_BRANCH_NAME = '${{ github.event.pull_request.head.ref }}'.replaceAll("/", "-")
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: 'refs/tags/pull-request/PR#${{ github.event.number }}-${{ SANITIZED_BRANCH_NAME }}',
+              ref: 'refs/tags/pull-request/PR#${{ github.event.number }}-${{ github.event.pull_request.head.ref.replaceAll("/", "-") }}',
               sha: context.sha
             })
