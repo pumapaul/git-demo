@@ -14,8 +14,11 @@ jobs:
         with:
           script: |
             const PULL_REQUEST_NUMBER = github.event.number
+            console.log("PR#" + PULL_REQUEST_NUMBER)
             const SANITIZED_BRANCH_NAME = github.event.pull_request.head.ref.replaceAll("/", "-")
+            console.log("Branch name: " + SANITIZED_BRANCH_NAME)
             const TAG = "refs/tags/pull-request/PR#" + PULL_REQUEST_NUMBER + "-" + SANITIZED_BRANCH_NAME
+            console.log("tag: " + TAG)
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
