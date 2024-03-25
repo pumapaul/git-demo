@@ -17,6 +17,6 @@ jobs:
             github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              ref: 'refs/tags/pull-request/PR#${{ github.event.number }}-${SANITIZED_BRANCH_NAME}',
+              ref: 'refs/tags/pull-request/PR#${{ github.event.number }}-${{ SANITIZED_BRANCH_NAME }}',
               sha: context.sha
             })
