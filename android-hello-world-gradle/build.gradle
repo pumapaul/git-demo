@@ -1,0 +1,2 @@
+// Root build.gradle - Android Hello World (no AGP required)
+// Uses local Android SDK tools directly via Gradle tasks

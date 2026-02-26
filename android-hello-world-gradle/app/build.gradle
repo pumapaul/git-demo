@@ -1,0 +1,222 @@
+// Android Hello World - Gradle build using SDK tools directly
+//
+// Since maven.google.com is unreachable in this environment, we drive
+// the Android SDK build tools (aapt, javac, dx, apksigner) as Gradle
+// Exec tasks. This gives us proper task dependencies, incremental
+// builds, and the standard `gradle assembleDebug` workflow.
+
+import java.security.KeyStore
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+ext {
+    androidHome   = '/usr/lib/android-sdk'
+    buildToolsDir = "${androidHome}/build-tools/debian"
+    platformDir   = "${androidHome}/platforms/android-23"
+    androidJar    = "${platformDir}/android.jar"
+
+    // Source / output paths
+    mainDir    = 'src/main'
+    manifestFile = file("${mainDir}/AndroidManifest.xml")
+    resDir     = file("${mainDir}/res")
+    javaDir    = file("${mainDir}/java")
+
+    genDir     = file("${buildDir}/generated/source/r")
+    classesDir = file("${buildDir}/intermediates/classes")
+    dexDir     = file("${buildDir}/intermediates/dex")
+    apkDir     = file("${buildDir}/outputs/apk")
+}
+
+// ---------------------------------------------------------------------------
+// Task: Generate R.java from resources
+// ---------------------------------------------------------------------------
+
+task generateR(type: Exec) {
+    description = 'Generate R.java from Android resources'
+    group = 'android'
+
+    inputs.dir resDir
+    inputs.file manifestFile
+    outputs.dir genDir
+
+    doFirst { genDir.mkdirs() }
+
+    commandLine 'aapt', 'package',
+        '-f', '-m',
+        '-J', genDir,
+        '-M', manifestFile,
+        '-S', resDir,
+        '-I', androidJar
+}
+
+// ---------------------------------------------------------------------------
+// Task: Compile Java sources
+// ---------------------------------------------------------------------------
+
+task compileJava(type: JavaCompile) {
+    description = 'Compile Java sources against android.jar'
+    group = 'android'
+
+    dependsOn generateR
+
+    source = fileTree(javaDir) + fileTree(genDir)
+    classpath = files(androidJar)
+    destinationDirectory = classesDir
+
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+
+    options.bootstrapClasspath = files(androidJar)
+}
+
+// ---------------------------------------------------------------------------
+// Task: Convert .class files to Dalvik DEX
+// ---------------------------------------------------------------------------
+
+task dex(type: Exec) {
+    description = 'Convert class files to Dalvik DEX format'
+    group = 'android'
+
+    dependsOn compileJava
+
+    inputs.dir classesDir
+    outputs.file file("${dexDir}/classes.dex")
+
+    doFirst { dexDir.mkdirs() }
+
+    commandLine "${buildToolsDir}/dx",
+        '--dex',
+        "--output=${dexDir}/classes.dex",
+        classesDir
+}
+
+// ---------------------------------------------------------------------------
+// Task: Package into unsigned APK
+// ---------------------------------------------------------------------------
+
+task packageApk(type: Exec) {
+    description = 'Package resources and DEX into unsigned APK'
+    group = 'android'
+
+    dependsOn dex
+
+    inputs.dir resDir
+    inputs.file manifestFile
+    inputs.file file("${dexDir}/classes.dex")
+    outputs.file file("${apkDir}/hello-world.unsigned.apk")
+
+    doFirst { apkDir.mkdirs() }
+
+    commandLine 'aapt', 'package',
+        '-f',
+        '-M', manifestFile,
+        '-S', resDir,
+        '-I', androidJar,
+        '-F', "${apkDir}/hello-world.unsigned.apk"
+
+    // Add DEX file to the APK after aapt creates it
+    doLast {
+        exec {
+            workingDir dexDir
+            commandLine 'aapt', 'add',
+                "${apkDir}/hello-world.unsigned.apk",
+                'classes.dex'
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Task: Create debug keystore & sign APK
+// ---------------------------------------------------------------------------
+
+task signApk(type: Exec) {
+    description = 'Sign the APK with a debug keystore'
+    group = 'android'
+
+    dependsOn packageApk
+
+    def keystoreFile = file("${buildDir}/debug.keystore")
+
+    inputs.file file("${apkDir}/hello-world.unsigned.apk")
+    outputs.file file("${apkDir}/hello-world.apk")
+
+    doFirst {
+        if (!keystoreFile.exists()) {
+            exec {
+                commandLine 'keytool', '-genkeypair',
+                    '-dname', 'CN=Android Debug,O=Android,C=US',
+                    '-keystore', keystoreFile,
+                    '-storepass', 'android',
+                    '-keypass', 'android',
+                    '-alias', 'androiddebugkey',
+                    '-keyalg', 'RSA',
+                    '-keysize', '2048',
+                    '-validity', '10000'
+            }
+        }
+    }
+
+    commandLine 'apksigner', 'sign',
+        '--ks', keystoreFile,
+        '--ks-pass', 'pass:android',
+        '--key-pass', 'pass:android',
+        '--ks-key-alias', 'androiddebugkey',
+        '--out', "${apkDir}/hello-world.apk",
+        "${apkDir}/hello-world.unsigned.apk"
+}
+
+// ---------------------------------------------------------------------------
+// Task: Verify signed APK
+// ---------------------------------------------------------------------------
+
+task verifyApk(type: Exec) {
+    description = 'Verify the signed APK'
+    group = 'android'
+
+    dependsOn signApk
+
+    commandLine 'apksigner', 'verify', "${apkDir}/hello-world.apk"
+
+    doLast {
+        println ''
+        println '=== Build Successful! ==='
+        println "APK: ${apkDir}/hello-world.apk"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Task: Print APK info
+// ---------------------------------------------------------------------------
+
+task apkInfo(type: Exec) {
+    description = 'Print APK metadata'
+    group = 'android'
+
+    dependsOn verifyApk
+
+    commandLine 'aapt', 'dump', 'badging', "${apkDir}/hello-world.apk"
+}
+
+// ---------------------------------------------------------------------------
+// Convenience aliases
+// ---------------------------------------------------------------------------
+
+task assembleDebug {
+    description = 'Build the debug APK'
+    group = 'build'
+    dependsOn verifyApk
+}
+
+task build {
+    description = 'Build the project'
+    group = 'build'
+    dependsOn assembleDebug
+}
+
+task clean(type: Delete) {
+    description = 'Delete the build directory'
+    group = 'build'
+    delete buildDir
+}
